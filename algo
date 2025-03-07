@@ -1,0 +1,228 @@
+‎algo/yescrypt.c
++22
+-2
+Original file line number	Diff line number	Diff line change
+@@ -8,7 +8,7 @@
+
+#include "yescrypt/yescrypt.h"
+
+int scanhash_yescrypt(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
+int do_scanhash(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done, void (*hash_func)(const char *, char *, uint32_t))
+{
+	uint32_t _ALIGN(64) vhash[8];
+	uint32_t _ALIGN(64) endiandata[20];
+@@ -26,7 +26,7 @@ int scanhash_yescrypt(int thr_id, struct work *work, uint32_t max_nonce, uint64_
+
+	do {
+		be32enc(&endiandata[19], n);
+		yescrypt_hash((char*) endiandata, (char*) vhash, 80);
+		hash_func((char*) endiandata, (char*) vhash, 80);
+		if (vhash[7] < Htarg && fulltest(vhash, ptarget)) {
+			work_set_target_ratio(work, vhash);
+			*hashes_done = n - first_nonce + 1;
+@@ -42,3 +42,23 @@ int scanhash_yescrypt(int thr_id, struct work *work, uint32_t max_nonce, uint64_
+
+	return 0;
+}
+int scanhash_yescrypt(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
+{
+	return (do_scanhash(thr_id, work, max_nonce, hashes_done, yescrypt_hash));
+}
+int scanhash_yescryptr8(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
+{
+	return (do_scanhash(thr_id, work, max_nonce, hashes_done, yescrypt_hash_r8));
+}
+int scanhash_yescryptr16(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
+{
+	return (do_scanhash(thr_id, work, max_nonce, hashes_done, yescrypt_hash_r16));
+}
+int scanhash_yescryptr32(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done)
+{
+	return (do_scanhash(thr_id, work, max_nonce, hashes_done, yescrypt_hash_r32));
+}
+‎cpu-miner.c
++26
+Original file line number	Diff line number	Diff line change
+@@ -141,6 +141,9 @@ enum algos {
+	ALGO_X20R,
+	ALGO_XEVAN,
+	ALGO_YESCRYPT,
+	ALGO_YESCRYPTR8,
+	ALGO_YESCRYPTR16,
+	ALGO_YESCRYPTR32,
+	ALGO_ZR5,
+	ALGO_COUNT
+};
+@@ -210,6 +213,9 @@ static const char *algo_names[] = {
+	"x20r",
+	"xevan",
+	"yescrypt",
+	"yescryptr8",
+	"yescryptr16",
+	"yescryptr32",
+	"zr5",
+	"\0"
+};
+@@ -376,6 +382,9 @@ Options:\n\
+                          x20r         X20R\n\
+                          xevan        Xevan (BitSend)\n\
+                          yescrypt     Yescrypt\n\
+			  yescryptr8   Yescrypt r8\n\
+			  yescryptr16  Yescrypt r16\n\
+			  yescryptr32  Yescrypt r32\n\
+                          zr5          ZR5\n\
+  -o, --url=URL         URL of mining server\n\
+  -O, --userpass=U:P    username:password pair for mining server\n\
+@@ -1853,6 +1862,9 @@ static void stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
+			case ALGO_NEOSCRYPT:
+			case ALGO_PLUCK:
+			case ALGO_YESCRYPT:
+			case ALGO_YESCRYPTR8:
+			case ALGO_YESCRYPTR16:
+			case ALGO_YESCRYPTR32:
+				work_set_target(work, sctx->job.diff / (65536.0 * opt_diff_factor));
+				break;
+			case ALGO_ALLIUM:
+@@ -2190,8 +2202,13 @@ static void *miner_thread(void *userdata)
+			case ALGO_DROP:
+			case ALGO_PLUCK:
+			case ALGO_YESCRYPT:
+			case ALGO_YESCRYPTR8:
+				max64 = 0x1ff;
+				break;
+			case ALGO_YESCRYPTR16:
+			case ALGO_YESCRYPTR32:
+				max64 = 0xfff;
+				break;
+			case ALGO_ALLIUM:
+			case ALGO_LYRA2:
+			case ALGO_LYRA2REV2:
+@@ -2453,6 +2470,15 @@ static void *miner_thread(void *userdata)
+		case ALGO_YESCRYPT:
+			rc = scanhash_yescrypt(thr_id, &work, max_nonce, &hashes_done);
+			break;
+		case ALGO_YESCRYPTR8:
+			rc = scanhash_yescryptr8(thr_id, &work, max_nonce, &hashes_done);
+			break;
+		case ALGO_YESCRYPTR16:
+			rc = scanhash_yescryptr16(thr_id, &work, max_nonce, &hashes_done);
+			break;
+		case ALGO_YESCRYPTR32:
+			rc = scanhash_yescryptr32(thr_id, &work, max_nonce, &hashes_done);
+			break;
+		case ALGO_ZR5:
+			rc = scanhash_zr5(thr_id, &work, max_nonce, &hashes_done);
+			break;
+‎miner.h
++3
+Original file line number	Diff line number	Diff line change
+@@ -263,6 +263,9 @@ int scanhash_x17(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *ha
+int scanhash_x20r(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
+int scanhash_xevan(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
+int scanhash_yescrypt(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
+int scanhash_yescryptr8(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
+int scanhash_yescryptr16(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
+int scanhash_yescryptr32(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
+int scanhash_zr5(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
+
+/* api related */
+‎yescrypt/yescrypt-common.c
++26
+Original file line number	Diff line number	Diff line change
+@@ -36,6 +36,9 @@
+static const char * const itoa64 =
+	"./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+char *yescrypt_client_key = NULL;
+int yescrypt_client_key_len = 0;
+static uint8_t* encode64_uint32(uint8_t* dst, size_t dstlen, uint32_t src, uint32_t srcbits)
+{
+	uint32_t bit;
+@@ -367,6 +370,29 @@ void yescrypt_hash(const char *input, char *output, uint32_t len)
+	yescrypt_bsty((uint8_t*)input, len, (uint8_t*)input, len, 2048, 8, 1, (uint8_t*)output, 32);
+}
+
+void yescrypt_hash_r8(const char *input, char *output, uint32_t len)
+{
+	yescrypt_client_key = "Client Key";
+	yescrypt_client_key_len = strlen("Client Key");
+	yescrypt_bsty((uint8_t*)input, len, (uint8_t *)input, len, 2048, 8, 1, (uint8_t*)output, 32);
+}
+void yescrypt_hash_r16(const char *input, char *output, uint32_t len)
+{
+	yescrypt_client_key = "Client Key";
+	yescrypt_client_key_len = strlen("Client Key");
+	yescrypt_bsty((uint8_t*)input, len, (uint8_t*)input, len, 4096, 16, 1, (uint8_t*)output, 32);
+}
+void yescrypt_hash_r32(const char *input, char *output, uint32_t len)
+{
+	yescrypt_client_key = "WaviBanana";
+	yescrypt_client_key_len = strlen("WaviBanana");
+	yescrypt_bsty((uint8_t*)input, len, (uint8_t*)input, len, 4096, 32, 1, (uint8_t*)output, 32);
+}
+/* for util.c test */
+void yescrypthash(void *output, const void *input)
+{
+‎yescrypt/yescrypt-opt.c
++5
+-1
+Original file line number	Diff line number	Diff line change
+@@ -915,7 +915,11 @@ yescrypt_kdf(const yescrypt_shared_t * shared, yescrypt_local_t * local,
+		{
+			HMAC_SHA256_CTX_Y ctx;
+			HMAC_SHA256_Init_Y(&ctx, buf, buflen);
+			HMAC_SHA256_Update_Y(&ctx, salt, saltlen);
+			if (yescrypt_client_key != NULL)
+				HMAC_SHA256_Update_Y(&ctx, yescrypt_client_key,
+				    yescrypt_client_key_len);
+			else
+				HMAC_SHA256_Update_Y(&ctx, salt, saltlen);
+			HMAC_SHA256_Final_Y((uint8_t *)sha256, &ctx);
+		}
+		/* Compute StoredKey */
+‎yescrypt/yescrypt-simd.c
++6
+-7
+Original file line number	Diff line number	Diff line change
+@@ -1355,13 +1355,12 @@ yescrypt_kdf(const yescrypt_shared_t * shared, yescrypt_local_t * local,
+		{
+			HMAC_SHA256_CTX_Y ctx;
+			HMAC_SHA256_Init_Y(&ctx, buf, buflen);
+#if 0
+/* Proper yescrypt */
+ 			HMAC_SHA256_Update_Y(&ctx, "Client Key", 10);
+#else
+/* GlobalBoost-Y buggy yescrypt */
+			HMAC_SHA256_Update_Y(&ctx, salt, saltlen);
+#endif
+			if (yescrypt_client_key != NULL)
+				HMAC_SHA256_Update_Y(&ctx, yescrypt_client_key,
+				    yescrypt_client_key_len);
+			else
+				/* GlobalBoost-Y buggy yescrypt */
+				HMAC_SHA256_Update_Y(&ctx, salt, saltlen);
+			HMAC_SHA256_Final_Y(sha256, &ctx);
+		}
+		/* Compute StoredKey */
+‎yescrypt/yescrypt.h
++7
+Original file line number	Diff line number	Diff line change
+@@ -39,6 +39,10 @@ extern "C" {
+#include <stdlib.h> /* for size_t */
+
+void yescrypt_hash(const char* input, char* output, uint32_t len);
+void yescrypt_hash_r8(const char* input, char* output, uint32_t len);
+void yescrypt_hash_r16(const char* input, char* output, uint32_t len);
+void yescrypt_hash_r32(const char* input, char* output, uint32_t len);
+
+/**
+ * crypto_scrypt(passwd, passwdlen, salt, saltlen, N, r, p, buf, buflen):
+@@ -365,6 +369,9 @@ extern uint8_t * yescrypt_gensalt(
+    yescrypt_flags_t __flags,
+    const uint8_t * __src, size_t __srclen);
+
+extern char *yescrypt_client_key;
+extern int yescrypt_client_key_len;
+#ifdef __cplusplus
+}
+#endif
